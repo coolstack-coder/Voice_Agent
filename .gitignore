@@ -17,3 +17,5 @@ frontend/dist/
 *.mp4
 *.mov
 .DS_Store
+*.tsbuildinfo
+.claude/
