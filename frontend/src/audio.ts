@@ -92,11 +92,17 @@ export function speakWithBrowser(text: string): Promise<void> {
       raf = requestAnimationFrame(wobble);
     };
     u.onstart = wobble;
-    u.onend = u.onerror = () => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       cancelAnimationFrame(raf);
       voice.level = 0;
       resolve();
     };
+    u.onend = u.onerror = finish;
+    // some browsers (and headless ones) never fire onend; don't hang the conversation
+    setTimeout(finish, 1500 + text.length * 75);
     speechSynthesis.speak(u);
   });
 }

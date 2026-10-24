@@ -13,8 +13,12 @@ const GREETING = "Hold the button and tell me what happened. Take a breath. We'l
 declare global {
   interface Window {
     __gh?: Record<string, unknown>;
+    __ghLog?: (type: string, data?: unknown) => void;
   }
 }
+
+// lets the recording script timestamp events (set via Playwright's exposeFunction)
+const demoLog = (type: string, data?: unknown) => window.__ghLog?.(type, data);
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -60,7 +64,7 @@ export default function App() {
       await new Promise((r) => setTimeout(r, 900));
       setBubble({ role: "agent", text: res.reply });
       setMascot("speaking");
-      window.__gh && ((window.__gh.events as unknown[]).push({ t: performance.now(), type: "reply", text: res.reply, audio: res.audio }));
+      demoLog("reply", { text: res.reply, audio: res.audio, heard: res.heard, timings: res.timings });
       if (res.audio) await playMp3(res.audio);
       else await speakWithBrowser(res.reply);
     } catch (e) {
@@ -112,12 +116,14 @@ export default function App() {
   // automation hook used to record the demo video with pre-recorded voices
   useEffect(() => {
     window.__gh = {
-      events: [] as unknown[],
       say: async (url: string) => {
+        demoLog("say_start", url);
         setMascot("listening");
         setBubble({ role: "user", text: "Listening…" });
         const blob = await fakeSpeak(url);
+        demoLog("say_end", url);
         await runTurn(blob);
+        demoLog("turn_end", url);
       },
       docs: (open: boolean) => setDocsOpen(open),
       busy: () => busy.current,
