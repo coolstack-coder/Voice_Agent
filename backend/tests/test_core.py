@@ -73,3 +73,10 @@ def test_backfill_extracts_rigid_fields():
     assert inc.victim_bank == "SBI" and inc.payment_app == "PhonePe" and inc.channel == "upi"
     assert inc.txn_ref == "412398765432" and inc.scammer_handle == "9876543210"
     assert set(filled) == {"victim_bank", "payment_app", "txn_ref", "scammer_handle"}
+
+
+def test_reply_language():
+    from app.extract import reply_language
+    assert reply_language("Someone called me and I gave the OTP") == "English"
+    assert reply_language("maine 5000 bhej diye, wo abhi bhi line pe hai").startswith("Hinglish")
+    assert reply_language("मैंने पैसे भेज दिए").startswith("Hinglish")

@@ -18,7 +18,7 @@ import httpx
 
 from . import config
 from .clock import now_ist, resolve_when
-from .extract import backfill
+from .extract import backfill, reply_language
 from .models import Case, Turn
 from .playbook import build_plan, golden_hour_deadline, liability, next_actions
 
@@ -29,13 +29,13 @@ FALLBACK_MODEL = "openai/gpt-oss-20b"
 SYSTEM = """You are Kavach, the calm voice of GoldenHour: first aid for people in India who were JUST \
 defrauded online. They are scared and may still be on the scammer's call.
 
-Speak: same language as the user (Hindi/English/Hinglish); always write Hindi in Roman script. Max 2 short sentences, under 30 \
+Speak: mirror the user's language. English in -> English out. Hindi/Hinglish in -> Hinglish out, written in Roman script. Max 2 short sentences, under 30 \
 words, spoken aloud: no lists, markdown or emojis. Never blame. Give ONE next action and ask at most ONE \
 question for the most useful missing fact.
 
 Work: whenever they reveal facts call update_incident (times: "20 minute pehle" -> fraud_minutes_ago=20; \
-"kal raat 9 baje" -> fraud_clock_time="21:00", fraud_day_offset=-1). If they may still be on the call, \
-say hang up first; once they say they hung up, set still_in_contact=false and mark "disconnect" done. \
+"kal raat 9 baje" -> fraud_clock_time="21:00", fraud_day_offset=-1). Set still_in_contact only if they say so. If they are still \
+on the call, say hang up first; once they say they hung up, set still_in_contact=false and mark "disconnect" done. \
 When they confirm doing any step, call mark_step_done. Speak the top step from the tool \
 result. Use ONLY steps, numbers and deadlines the tools return; never invent helplines, laws or deadlines. \
 When amount, time and UTR are known, say the complaint drafts are ready on screen. You are not police or \
@@ -151,7 +151,8 @@ async def _chat(messages: list[dict]) -> dict:
 
 
 async def respond(case: Case, user_text: str) -> tuple[str, list[str]]:
-    clock = f"Now: {now_ist().strftime('%a %d %b %Y %I:%M %p')} IST."
+    clock = (f"Now: {now_ist().strftime('%a %d %b %Y %I:%M %p')} IST. "
+             f"Reply language for this turn: {reply_language(user_text)}.")
     messages = [{"role": "system", "content": SYSTEM + "\n" + clock}, *case.history[-12:],
                 {"role": "user", "content": user_text}]
     used: list[str] = []

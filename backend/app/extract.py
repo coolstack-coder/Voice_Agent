@@ -49,3 +49,18 @@ def backfill(inc: Incident, text: str) -> list[str]:
         elif m := PHONE.search(text):
             inc.scammer_handle, _ = m.group(1).replace(" ", "").replace("-", ""), filled.append("scammer_handle")
     return filled
+
+
+HINDI_MARKERS = set(
+    "hai hain tha thi ka ki ke ko se pe par mein maine mera meri mere mujhe nahi nahin aur bhi kya kar kiya "
+    "diya diye gaya gaye bola boli wo woh abhi bhaiya ji paise rupaye haan accha kaat kat raha rahi".split()
+)
+
+
+def reply_language(text: str) -> str:
+    """Pick the reply language deterministically; LLMs drift towards the prompt's examples."""
+    if any("ऀ" <= ch <= "ॿ" for ch in text):
+        return "Hinglish (Hindi in Roman script)"
+    words = re.findall(r"[a-z]+", text.lower())
+    hits = sum(w in HINDI_MARKERS for w in words)
+    return "Hinglish (Hindi in Roman script)" if hits >= 2 else "English"
