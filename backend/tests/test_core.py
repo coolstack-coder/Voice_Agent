@@ -80,3 +80,11 @@ def test_reply_language():
     assert reply_language("Someone called me and I gave the OTP") == "English"
     assert reply_language("maine 5000 bhej diye, wo abhi bhi line pe hai").startswith("Hinglish")
     assert reply_language("मैंने पैसे भेज दिए").startswith("Hinglish")
+
+
+def test_confirmed_steps():
+    from app.extract import confirmed_steps
+    assert confirmed_steps("ठीक है, कॉल काट दिया।") == ["disconnect"]
+    assert confirmed_steps("1930 पे कॉल कर दिया, उन्होंने कंप्लेंट ले ली") == ["call_1930"]
+    assert confirmed_steps("Bank को भी call कर दिया, UPI freeze हो गया") == ["bank_freeze"]
+    assert confirmed_steps("I haven't called anyone yet") == []

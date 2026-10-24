@@ -18,7 +18,7 @@ BANKS = {
     r"एसबीआई|स्टेट बैंक": "SBI", r"एचडीएफसी": "HDFC Bank", r"आईसीआईसीआई": "ICICI Bank",
 }
 APPS = {
-    r"phone ?pe|फोन ?पे": "PhonePe", r"google ?pay|\bgpay\b|गूगल ?पे": "Google Pay",
+    r"phone ?pe|phone ?pay|फोन ?पे|फोन ?पी|फ़ोन ?पे": "PhonePe", r"google ?pay|\bgpay\b|गूगल ?पे": "Google Pay",
     r"paytm|पेटीएम": "Paytm", r"\bbhim\b|भीम": "BHIM", r"amazon ?pay": "Amazon Pay",
 }
 UTR = re.compile(r"(?:utr|ref(?:erence)?|transaction id|यूटीआर)\D{0,15}(\d{12})", re.I)
@@ -64,3 +64,22 @@ def reply_language(text: str) -> str:
     words = re.findall(r"[a-z]+", text.lower())
     hits = sum(w in HINDI_MARKERS for w in words)
     return "Hinglish (Hindi in Roman script)" if hits >= 2 else "English"
+
+
+DONE = r"(kar diya|kar di|kiya|ho gaya|ho gayi|ho gya|le li|kaat diya|kat diya|done|called|blocked|frozen|"\
+       r"कर दिया|कर दी|किया|हो गया|हो गई|ले ली|काट दिया)"
+STEP_PATTERNS = {
+    "disconnect": rf"((call|कॉल)\W*(kaat|kat|cut|काट)|hung up|disconnect)",
+    "call_1930": rf"1930.{{0,40}}{DONE}",
+    "bank_freeze": rf"(bank|बैंक|freeze|फ्रीज़|फ्रीज|block|ब्लॉक).{{0,40}}{DONE}",
+}
+
+
+def confirmed_steps(text: str) -> list[str]:
+    """Steps the user clearly says they've completed ("1930 pe call kar diya").
+
+    The LLM is asked to call mark_step_done, but it sometimes ticks the wrong id;
+    these phrases are unambiguous enough to settle deterministically.
+    """
+    low = text.lower()
+    return [step for step, pat in STEP_PATTERNS.items() if re.search(pat, low)]

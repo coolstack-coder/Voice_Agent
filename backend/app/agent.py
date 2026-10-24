@@ -18,13 +18,14 @@ import httpx
 
 from . import config
 from .clock import now_ist, resolve_when
-from .extract import backfill, reply_language
+from .extract import backfill, confirmed_steps, reply_language
 from .models import Case, Turn
 from .playbook import build_plan, golden_hour_deadline, liability, next_actions
 
 log = logging.getLogger(__name__)
 
 FALLBACK_MODEL = "openai/gpt-oss-20b"
+UPI_APPS = {"PhonePe", "Google Pay", "Paytm", "BHIM", "Amazon Pay"}
 
 SYSTEM = """You are Kavach, the calm voice of GoldenHour: first aid for people in India who were JUST \
 defrauded online. They are scared and may still be on the scammer's call.
@@ -38,15 +39,16 @@ Work: whenever they reveal facts call update_incident (times: "20 minute pehle" 
 on the call, say hang up first; once they say they hung up, set still_in_contact=false and mark "disconnect" done. \
 When they confirm doing any step, call mark_step_done. Speak the top step from the tool \
 result. Use ONLY steps, numbers and deadlines the tools return; never invent helplines, laws or deadlines. \
-When amount, time and UTR are known, say the complaint drafts are ready on screen. You are not police or \
+When drafts_ready first becomes true, tell them the complaint drafts are ready on screen. You are not police or \
 a lawyer.
 
 Example: user "maine abhi 5000 bhej diye, wo abhi bhi line pe hai" -> you "Ghabraiye mat, aap akele nahi hain. \
 Pehle call kaat dijiye, phir batayiye paise kis app se gaye?"
 """
 
-STEP_IDS = ["disconnect", "call_1930", "bank_freeze", "uninstall_remote", "ncrp",
-            "bank_written", "evidence", "sextortion", "recovery_scam"]
+# Steps a person can confirm by voice. The written bank dispute is ticked in the UI:
+# the model kept confusing "called the bank" with "sent the letter".
+STEP_IDS = ["disconnect", "call_1930", "bank_freeze", "uninstall_remote", "ncrp", "evidence"]
 
 TOOLS: list[dict[str, Any]] = [
     {"type": "function", "function": {
@@ -90,6 +92,7 @@ def _plan_view(case: Case) -> dict:
         "golden_hour_minutes_left": max(0, round((gh - now_ist()).total_seconds() / 60)) if gh else None,
         "rbi": liability(case)["text"],
         "missing_for_complaint": case.incident.missing_for_complaint(),
+        "drafts_ready": not case.incident.missing_for_complaint(),
     }
 
 
@@ -116,6 +119,8 @@ def _run_tool(case: Case, name: str, args: dict) -> dict:
                 if k == "scammer_handle" and not any(ch.isdigit() or ch == "@" for ch in str(v)):
                     continue  # "the CBI guy" is not an identifier the police can trace
                 setattr(inc, k, v)
+        if inc.channel in (None, "wallet", "other") and inc.payment_app in UPI_APPS:
+            inc.channel = "upi"  # PhonePe/GPay/Paytm transfers are UPI, not wallet
         if inc.still_in_contact is False and "disconnect" not in case.done_steps:
             case.done_steps.append("disconnect")
         return _plan_view(case)
@@ -151,14 +156,22 @@ async def _chat(messages: list[dict]) -> dict:
 
 
 async def respond(case: Case, user_text: str) -> tuple[str, list[str]]:
-    clock = (f"Now: {now_ist().strftime('%a %d %b %Y %I:%M %p')} IST. "
-             f"Reply language for this turn: {reply_language(user_text)}.")
-    messages = [{"role": "system", "content": SYSTEM + "\n" + clock}, *case.history[-12:],
-                {"role": "user", "content": user_text}]
     used: list[str] = []
     reply = ""
     if filled := backfill(case.incident, user_text):
         log.info("regex backfill: %s", filled)
+    for step in confirmed_steps(user_text):
+        if step not in case.done_steps:
+            case.done_steps.append(step)
+            log.info("user confirmed step: %s", step)
+        if step == "disconnect":
+            case.incident.still_in_contact = False
+    # computed after the deterministic passes so the model starts from the true state
+    clock = (f"Now: {now_ist().strftime('%a %d %b %Y %I:%M %p')} IST. "
+             f"Reply language for this turn: {reply_language(user_text)}. "
+             f"Current state: {json.dumps(_plan_view(case), default=str)}")
+    messages = [{"role": "system", "content": SYSTEM + "\n" + clock}, *case.history[-12:],
+                {"role": "user", "content": user_text}]
     for _ in range(4):
         msg = await _chat(messages)
         calls = msg.get("tool_calls") or []
