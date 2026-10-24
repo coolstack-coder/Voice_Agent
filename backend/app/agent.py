@@ -126,8 +126,10 @@ def _run_tool(case: Case, name: str, args: dict, user_text: str = "") -> dict:
                 inc.fraud_time = t
         for k, v in args.items():
             if hasattr(inc, k) and v not in (None, ""):
+                if k in ("txn_ref", "scammer_handle", "victim_bank", "payment_app", "victim_name", "summary"):
+                    v = str(v)  # the schema allows numbers for ids; the case file stores text
                 if k == "txn_ref":
-                    v = "".join(ch for ch in str(v) if ch.isalnum())
+                    v = "".join(ch for ch in v if ch.isalnum())
                 if k == "scammer_handle" and not any(ch.isdigit() or ch == "@" for ch in str(v)):
                     continue  # "the CBI guy" is not an identifier the police can trace
                 setattr(inc, k, v)

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .clock import now_ist
 
@@ -24,6 +24,8 @@ ScamType = Literal[
 
 
 class Incident(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)  # a bad tool arg fails loudly, not on next load
+
     victim_name: Optional[str] = None
     amount: Optional[float] = None
     channel: Optional[Channel] = None

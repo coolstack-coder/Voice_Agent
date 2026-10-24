@@ -44,9 +44,22 @@ export default function App() {
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setError("Backend offline: start it on :8000"));
+    // a refresh mid-crisis must not lose the case: it lives in the URL
+    const id = new URLSearchParams(location.search).get("case");
+    if (id) api.getCase(id).then((v) => {
+      apply(v);
+      const lastAgent = [...v.transcript].reverse().find((t) => t.role === "agent");
+      if (lastAgent) setBubble({ role: "agent", text: lastAgent.text });
+    }).catch(() => history.replaceState(null, "", location.pathname));
   }, []);
 
-  const ensureCase = async () => caseRef.current ?? (apply(await api.createCase()), caseRef.current!);
+  const ensureCase = async () => {
+    if (caseRef.current) return caseRef.current;
+    const v = await api.createCase();
+    apply(v);
+    history.replaceState(null, "", `?case=${v.id}`);
+    return v;
+  };
 
   const runTurn = useCallback(async (input: Blob | string) => {
     if (busy.current) return;

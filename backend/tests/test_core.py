@@ -88,3 +88,11 @@ def test_confirmed_steps():
     assert confirmed_steps("1930 पे कॉल कर दिया, उन्होंने कंप्लेंट ले ली") == ["call_1930"]
     assert confirmed_steps("Bank को भी call कर दिया, UPI freeze हो गया") == ["bank_freeze"]
     assert confirmed_steps("I haven't called anyone yet") == []
+
+
+def test_numeric_ids_are_stored_as_text():
+    from app.agent import _run_tool
+    c = Case()
+    _run_tool(c, "update_incident", {"scammer_handle": 9876543210, "txn_ref": 412398765432})
+    assert c.incident.scammer_handle == "9876543210" and c.incident.txn_ref == "412398765432"
+    Case.model_validate_json(c.model_dump_json())   # round-trips through the store
