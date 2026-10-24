@@ -63,3 +63,13 @@ def test_liability_bands():
     assert liability(c, now=NOW)["band"] == "zero"
     c.incident.otp_shared = True
     assert liability(c, now=NOW)["band"] == "negligence"
+
+
+def test_backfill_extracts_rigid_fields():
+    from app.extract import backfill
+    from app.models import Incident
+    inc = Incident()
+    filled = backfill(inc, "SBI account hai, PhonePe se bheja, UTR 412398765432, number 98765 43210 tha")
+    assert inc.victim_bank == "SBI" and inc.payment_app == "PhonePe" and inc.channel == "upi"
+    assert inc.txn_ref == "412398765432" and inc.scammer_handle == "9876543210"
+    assert set(filled) == {"victim_bank", "payment_app", "txn_ref", "scammer_handle"}
