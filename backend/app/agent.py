@@ -40,8 +40,7 @@ Work: whenever they reveal facts call update_incident (times: "20 minute pehle" 
 on the call, say hang up first; once they say they hung up, set still_in_contact=false and mark "disconnect" done. \
 When they confirm doing any step, call mark_step_done. Speak the top step from the tool \
 result. Use ONLY steps, numbers and deadlines the tools return; never invent helplines, laws or deadlines. \
-When drafts_ready first becomes true, tell them the complaint drafts are ready on screen. You are not police or \
-a lawyer.
+Never say internal names like txn_ref or step ids; say "UTR". You are not police or a lawyer.
 
 Example: user "maine abhi 5000 bhej diye, wo abhi bhi line pe hai" -> you "Ghabraiye mat, aap akele nahi hain. \
 Pehle call kaat dijiye, phir batayiye paise kis app se gaye?"
@@ -155,7 +154,7 @@ async def _chat(messages: list[dict]) -> dict:
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {config.GROQ_API_KEY}"},
                 json={"model": model, "messages": messages, "tools": TOOLS,
-                      "temperature": 0.3, "reasoning_effort": "low"},
+                      "temperature": 0.3, "reasoning_effort": config.REASONING_EFFORT},
             )
             if r.status_code == 200:
                 return r.json()["choices"][0]["message"]
@@ -176,6 +175,7 @@ async def _chat(messages: list[dict]) -> dict:
 async def respond(case: Case, user_text: str) -> tuple[str, list[str]]:
     used: list[str] = []
     reply = ""
+    drafts_were_ready = not case.incident.missing_for_complaint()
     if filled := backfill(case.incident, user_text):
         log.info("regex backfill: %s", filled)
     for step in confirmed_steps(user_text):
@@ -195,7 +195,11 @@ async def respond(case: Case, user_text: str) -> tuple[str, list[str]]:
         calls = msg.get("tool_calls") or []
         if not calls:
             reply = (msg.get("content") or "").strip()
-            break
+            if reply:
+                break
+            # gpt-oss occasionally spends the turn reasoning and says nothing: nudge once
+            messages.append({"role": "system", "content": "Now reply to the user, following the rules."})
+            continue
         messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
         for call in calls:
             name = call["function"]["name"]
@@ -208,6 +212,10 @@ async def respond(case: Case, user_text: str) -> tuple[str, list[str]]:
                 result = {"error": str(e)}
             used.append(name)
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result, default=str)})
+    if drafts_were_ready is False and not case.incident.missing_for_complaint() and "draft" not in reply.lower():
+        # the moment the last field lands, always say so: it's the payoff of the whole call
+        reply += (" Your complaint drafts are ready on screen." if reply_language(user_text) == "English"
+                  else " Aapke complaint drafts screen par ready hain.")
     if not reply:
         top = next_actions(case, 1)
         reply = top[0]["title"] if top else "I'm here. Tell me what happened."

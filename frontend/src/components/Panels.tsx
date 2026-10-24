@@ -108,8 +108,22 @@ export function IncidentCard({ incident }: { incident: Incident }) {
   );
 }
 
+const SHORT: Record<string, string> = {
+  disconnect: "Call disconnected",
+  call_1930: "1930 called",
+  bank_freeze: "Bank frozen",
+  uninstall_remote: "Remote app removed",
+  ncrp: "Complaint filed",
+  bank_written: "Letter sent",
+  evidence: "Evidence saved",
+  sextortion: "Profile reported",
+  recovery_scam: "Warned",
+};
+
 export function ActionPlan({ plan, onToggle, offsetMs }: { plan: Step[]; onToggle: (id: string) => void; offsetMs: number }) {
   const now = useNow(15000) + offsetMs;
+  const pending = plan.filter((s) => !s.done);
+  const done = plan.filter((s) => s.done);
   return (
     <div className="clay plan">
       <div className="card-head">
@@ -118,20 +132,20 @@ export function ActionPlan({ plan, onToggle, offsetMs }: { plan: Step[]; onToggl
       </div>
       <motion.ol layout className="steps">
         <AnimatePresence initial={false}>
-          {plan.map((s, i) => {
-            const overdue = s.deadline && !s.done && new Date(s.deadline).getTime() < now;
+          {pending.map((s, i) => {
+            const overdue = s.deadline && new Date(s.deadline).getTime() < now;
             return (
               <motion.li
                 layout
                 key={s.id}
-                className={`step ${s.done ? "done" : ""} ${i === 0 && !s.done ? "top" : ""}`}
+                className={`step ${i === 0 ? "top" : ""}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ type: "spring", stiffness: 300, damping: 26 }}
               >
-                <button className="tick" onClick={() => onToggle(s.id)} aria-label={`toggle ${s.title}`}>
-                  {s.done ? "✓" : i + 1}
+                <button className="tick" onClick={() => onToggle(s.id)} aria-label={`mark ${s.title} done`}>
+                  {i + 1}
                 </button>
                 <div className="step-body">
                   <div className="step-title">
@@ -150,6 +164,25 @@ export function ActionPlan({ plan, onToggle, offsetMs }: { plan: Step[]; onToggl
           })}
         </AnimatePresence>
       </motion.ol>
+      {done.length > 0 && (
+        <div className="done-row">
+          <AnimatePresence>
+            {done.map((s) => (
+              <motion.button
+                key={s.id}
+                className="done-chip"
+                onClick={() => onToggle(s.id)}
+                initial={{ scale: 0, rotate: -10 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 14 }}
+                title="Undo"
+              >
+                ✓ {SHORT[s.id] ?? s.title}
+              </motion.button>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

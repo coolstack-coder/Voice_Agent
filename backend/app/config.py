@@ -10,6 +10,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 STT_MODEL = os.getenv("STT_MODEL", "whisper-large-v3")
+REASONING_EFFORT = os.getenv("REASONING_EFFORT", "medium")
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "elevenlabs")
 TTS_CREDIT_BUDGET = int(os.getenv("TTS_CREDIT_BUDGET", "1000"))
 # ElevenLabs premade multilingual voice; flash v2.5 costs half the credits of v2
