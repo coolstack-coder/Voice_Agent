@@ -18,6 +18,10 @@ panic into:
 
 > Research behind the idea (15 candidate problems, scored): [docs/RESEARCH.md](docs/RESEARCH.md)
 
+![GoldenHour](demo/thumbnail.png)
+
+**Demo video (6 min):** a real run with live Whisper + gpt-oss + ElevenLabs, followed by a tour of the code.
+
 ## Architecture
 
 ```mermaid
