@@ -11,7 +11,7 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 STT_MODEL = os.getenv("STT_MODEL", "whisper-large-v3")
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "elevenlabs")
-TTS_CHAR_BUDGET = int(os.getenv("TTS_CHAR_BUDGET", "2000"))
+TTS_CREDIT_BUDGET = int(os.getenv("TTS_CREDIT_BUDGET", "1000"))
 # ElevenLabs premade multilingual voice; flash v2.5 costs half the credits of v2
 TTS_VOICE_ID = os.getenv("TTS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
 TTS_MODEL = os.getenv("TTS_MODEL", "eleven_flash_v2_5")

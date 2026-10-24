@@ -32,21 +32,24 @@ async def transcribe(audio: bytes, filename: str) -> str:
 
 
 class TTSBudget:
-    """Persists characters spent so a restart can't silently burn credits."""
+    """Persists ElevenLabs credits spent so a restart can't silently burn more.
+
+    Credits are read from the API's `character-cost` header (Flash = 0.5/char).
+    """
 
     path = config.DATA_DIR / "tts_usage.json"
 
     def used(self) -> int:
         try:
-            return json.loads(self.path.read_text())["chars"]
+            return json.loads(self.path.read_text())["credits"]
         except (FileNotFoundError, KeyError, ValueError):
             return 0
 
     def remaining(self) -> int:
-        return max(0, config.TTS_CHAR_BUDGET - self.used())
+        return max(0, config.TTS_CREDIT_BUDGET - self.used())
 
     def spend(self, n: int) -> None:
-        self.path.write_text(json.dumps({"chars": self.used() + n}))
+        self.path.write_text(json.dumps({"credits": self.used() + n}))
 
 
 budget = TTSBudget()
@@ -54,15 +57,18 @@ CACHE = config.DATA_DIR / "tts_cache"
 CACHE.mkdir(exist_ok=True)
 
 
-async def synthesize(text: str) -> bytes | None:
-    """Returns mp3 bytes, or None to tell the browser to speak it itself."""
+async def synthesize(text: str, lang: str | None = None) -> bytes | None:
+    """Returns mp3 bytes, or None to tell the browser to speak it itself.
+
+    lang="hi" makes Flash read Roman-script Hinglish with Hindi pronunciation.
+    """
     if config.TTS_PROVIDER != "elevenlabs" or not config.ELEVENLABS_API_KEY:
         return None
-    key = hashlib.sha1(f"{config.TTS_VOICE_ID}|{config.TTS_MODEL}|{text}".encode()).hexdigest()
+    key = hashlib.sha1(f"{config.TTS_VOICE_ID}|{config.TTS_MODEL}|{lang}|{text}".encode()).hexdigest()
     cached = CACHE / f"{key}.mp3"
     if cached.exists():
         return cached.read_bytes()
-    if len(text) > budget.remaining():
+    if len(text) / 2 > budget.remaining():
         log.warning("TTS budget exhausted, falling back to browser voice")
         return None
     async with httpx.AsyncClient(timeout=30) as client:
@@ -74,11 +80,12 @@ async def synthesize(text: str) -> bytes | None:
                 "text": text,
                 "model_id": config.TTS_MODEL,
                 "voice_settings": {"stability": 0.55, "similarity_boost": 0.75},
+                **({"language_code": lang} if lang else {}),
             },
         )
     if r.status_code != 200:
         log.warning("ElevenLabs %s: %s", r.status_code, r.text[:200])
         return None
-    budget.spend(len(text))
+    budget.spend(int(r.headers.get("character-cost", len(text))))
     cached.write_bytes(r.content)
     return r.content

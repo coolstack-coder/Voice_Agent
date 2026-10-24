@@ -46,10 +46,10 @@ export type TurnResult = {
   audio: string | null;
   timings: Record<string, number>;
   case: CaseView;
-  tts_chars_left: number;
+  tts_credits_left: number;
 };
 
-export type Health = { ok: boolean; tts: string; tts_chars_left: number; llm: string; stt: string };
+export type Health = { ok: boolean; tts: string; tts_credits_left: number; llm: string; stt: string };
 
 export type Documents = {
   ncrp: { title: string; fields: { label: string; value: string }[] };

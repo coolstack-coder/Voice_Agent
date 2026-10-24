@@ -56,7 +56,7 @@ export default function App() {
       apply(res.case);
       setLast({ tools: res.tools, timings: res.timings });
       setDocsVersion((n) => n + 1);
-      setHealth((h) => (h ? { ...h, tts_chars_left: res.tts_chars_left } : h));
+      setHealth((h) => (h ? { ...h, tts_credits_left: res.tts_credits_left } : h));
       await new Promise((r) => setTimeout(r, 900));
       setBubble({ role: "agent", text: res.reply });
       setMascot("speaking");
@@ -143,7 +143,7 @@ export default function App() {
           <span className="chip">STT · {health?.stt ?? "…"}</span>
           <span className="chip">LLM · {health?.llm?.replace("openai/", "") ?? "…"}</span>
           <span className={`chip ${health?.tts === "elevenlabs" ? "gold" : ""}`}>
-            TTS · {health?.tts === "elevenlabs" ? `ElevenLabs (${health.tts_chars_left} chars left)` : "browser"}
+            TTS · {health?.tts === "elevenlabs" ? `ElevenLabs (${health.tts_credits_left} credits left)` : "browser"}
           </span>
           <a className="chip call" href="tel:1930">📞 1930</a>
         </div>

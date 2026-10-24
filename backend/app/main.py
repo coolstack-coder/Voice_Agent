@@ -12,6 +12,7 @@ from . import config, store
 from .agent import respond, snapshot
 from .documents import all_documents
 from .models import Case
+from .extract import reply_language
 from .redact import redact
 from .speech import budget, synthesize, transcribe
 
@@ -39,7 +40,7 @@ def health():
     return {
         "ok": True,
         "tts": config.TTS_PROVIDER,
-        "tts_chars_left": budget.remaining(),
+        "tts_credits_left": budget.remaining(),
         "llm": config.LLM_MODEL,
         "stt": config.STT_MODEL,
     }
@@ -83,7 +84,7 @@ async def turn(case_id: str, audio: UploadFile | None = File(None), text: str | 
     store.save(case)
 
     t2 = time.perf_counter()
-    mp3 = await synthesize(reply)
+    mp3 = await synthesize(reply, "hi" if reply_language(reply) != "English" else "en")
     timings["tts_ms"] = round((time.perf_counter() - t2) * 1000)
     log.info("turn %s tools=%s timings=%s", case.id, tools, timings)
 
@@ -94,7 +95,7 @@ async def turn(case_id: str, audio: UploadFile | None = File(None), text: str | 
         "audio": base64.b64encode(mp3).decode() if mp3 else None,
         "timings": timings,
         "case": snapshot(case),
-        "tts_chars_left": budget.remaining(),
+        "tts_credits_left": budget.remaining(),
     }
 
 
