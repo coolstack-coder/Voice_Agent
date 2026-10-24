@@ -1,0 +1,19 @@
+# secrets
+.env
+*.env.local
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+backend/data/
+
+# node
+node_modules/
+frontend/dist/
+
+# media / os
+*.mp4
+*.mov
+.DS_Store
