@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -66,10 +67,10 @@ TOOLS: list[dict[str, Any]] = [
             "fraud_minutes_ago": {"type": "number"},
             "fraud_clock_time": {"type": "string", "description": "24h HH:MM"},
             "fraud_day_offset": {"type": "integer", "description": "0 today, -1 yesterday"},
-            "txn_ref": {"type": "string", "description": "UTR / transaction id"},
+            "txn_ref": {"type": ["string", "number"], "description": "UTR / transaction id"},
             "victim_bank": {"type": "string"},
             "payment_app": {"type": "string"},
-            "scammer_handle": {"type": "string", "description": "scammer phone, UPI id or profile"},
+            "scammer_handle": {"type": ["string", "number"], "description": "scammer phone, UPI id or profile"},
             "otp_shared": {"type": "boolean"},
             "still_in_contact": {"type": "boolean"},
             "summary": {"type": "string", "description": "neutral English account of what happened, for the police form"},
@@ -96,7 +97,19 @@ def _plan_view(case: Case) -> dict:
     }
 
 
-def _run_tool(case: Case, name: str, args: dict) -> dict:
+# A step the model ticks must be mentioned in what the user just said; otherwise
+# "1930 pe call kar diya" could tick "bank_freeze" too.
+STEP_EVIDENCE = {
+    "disconnect": r"call|cut|kaat|kat|hang|काट|कॉल",
+    "call_1930": r"1930|helpline|हेल्पलाइन",
+    "bank_freeze": r"bank|freeze|block|बैंक|फ्रीज|ब्लॉक",
+    "uninstall_remote": r"anydesk|teamviewer|uninstall|app",
+    "ncrp": r"cybercrime|portal|online complaint|website|पोर्टल",
+    "evidence": r"screenshot|स्क्रीनशॉट|proof|saboot|सबूत",
+}
+
+
+def _run_tool(case: Case, name: str, args: dict, user_text: str = "") -> dict:
     inc = case.incident
     if name == "update_incident":
         if args.get("scam_type") == "other" and inc.scam_type:
@@ -125,8 +138,11 @@ def _run_tool(case: Case, name: str, args: dict) -> dict:
             case.done_steps.append("disconnect")
         return _plan_view(case)
     if name == "mark_step_done":
-        if args.get("step_id") in STEP_IDS and args["step_id"] not in case.done_steps:
-            case.done_steps.append(args["step_id"])
+        step = args.get("step_id")
+        if step not in STEP_IDS or not re.search(STEP_EVIDENCE[step], user_text.lower()):
+            return {"ignored": f"user did not say they completed {step}", **_plan_view(case)}
+        if step not in case.done_steps:
+            case.done_steps.append(step)
         return _plan_view(case)
     return {"error": f"unknown tool {name}"}
 
@@ -144,12 +160,14 @@ async def _chat(messages: list[dict]) -> dict:
             if r.status_code == 200:
                 return r.json()["choices"][0]["message"]
             log.warning("Groq %s on %s: %s", r.status_code, model, r.text[:160])
+            if r.status_code == 400 and "tool call validation" in r.text:
+                continue  # sampling glitch (e.g. a number where a string was due): just resample
             if r.status_code == 429 and attempt == 0:
                 wait = float(r.headers.get("retry-after", "3"))
                 if wait <= 8:
                     await asyncio.sleep(wait)
                     continue
-            if r.status_code not in (429, 500, 502, 503):
+            if r.status_code not in (400, 429, 500, 502, 503):
                 r.raise_for_status()
         r.raise_for_status()
         raise RuntimeError("LLM unavailable")
@@ -184,7 +202,7 @@ async def respond(case: Case, user_text: str) -> tuple[str, list[str]]:
             try:
                 args = json.loads(call["function"].get("arguments") or "{}")
                 log.info("tool %s(%s)", name, args)
-                result = _run_tool(case, name, args)
+                result = _run_tool(case, name, args, user_text)
             except Exception as e:  # a malformed tool call shouldn't kill the turn
                 log.exception("tool %s failed", name)
                 result = {"error": str(e)}

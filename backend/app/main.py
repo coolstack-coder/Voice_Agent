@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import config, store
 from .agent import respond, snapshot
 from .documents import all_documents
-from .models import Case
+from .models import Case, Turn
+from .playbook import next_actions
 from .extract import reply_language
 from .redact import redact
 from .speech import budget, synthesize, transcribe
@@ -79,7 +80,14 @@ async def turn(case_id: str, audio: UploadFile | None = File(None), text: str | 
         raise HTTPException(422, "couldn't hear anything")
 
     t1 = time.perf_counter()
-    reply, tools = await respond(case, heard)
+    try:
+        reply, tools = await respond(case, heard)
+    except Exception:
+        # never leave a panicking person with an error screen: fall back to the playbook
+        log.exception("agent failed; answering from the playbook")
+        top = next_actions(case, 1)
+        reply, tools = (top[0]["title"] if top else "Please call 1930 now."), ["playbook_fallback"]
+        case.transcript += [Turn(role="user", text=heard), Turn(role="agent", text=reply, tools=tools)]
     timings["llm_ms"] = round((time.perf_counter() - t1) * 1000)
     store.save(case)
 
