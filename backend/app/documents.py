@@ -38,6 +38,21 @@ def _when(case: Case) -> str:
     return t.strftime("%d %b %Y, %I:%M %p IST") if t else "[MISSING: date & time]"
 
 
+def auto_summary(case: Case) -> str | None:
+    """Neutral narrative from the fields, used when the model didn't write one."""
+    inc = case.incident
+    if inc.summary:
+        return inc.summary
+    if not inc.amount:
+        return None
+    how = SCAM_LABELS.get(inc.scam_type or "other", "online fraud").lower()
+    via = CHANNEL_LABELS.get(inc.channel, "online payment")
+    app = f" ({inc.payment_app})" if inc.payment_app else ""
+    to = f" to {inc.scammer_handle}" if inc.scammer_handle else ""
+    return (f"The complainant was deceived through {how} and transferred {_money(inc.amount)} via "
+            f"{via}{app}{to} on {_when(case)}. The amount was sent under threat/deception and is unauthorised.")
+
+
 def ncrp_packet(case: Case) -> dict:
     """Field-by-field values for the cybercrime.gov.in financial fraud form."""
     inc = case.incident
@@ -52,7 +67,7 @@ def ncrp_packet(case: Case) -> dict:
             {"label": "Transaction ID / UTR", "value": _v(inc.txn_ref, "UTR from bank SMS")},
             {"label": "Amount lost", "value": _money(inc.amount)},
             {"label": "Suspect UPI / phone / profile", "value": _v(inc.scammer_handle, "scammer's number or UPI id")},
-            {"label": "Incident description", "value": _v(inc.summary, "what happened")},
+            {"label": "Incident description", "value": _v(auto_summary(case), "what happened")},
         ],
     }
 
@@ -80,7 +95,7 @@ I am writing to report a fraudulent transaction from my account.
   • Transaction ref / UTR: {_v(inc.txn_ref, 'UTR')}
   • Beneficiary: {_v(inc.scammer_handle, 'beneficiary UPI id / account')}
 
-What happened: {_v(inc.summary, 'short description')}
+What happened: {_v(auto_summary(case), 'short description')}
 
 I request you to (1) immediately block further debits, (2) raise a chargeback / dispute and
 request the beneficiary bank to place a lien on the amount, and (3) treat this report under the
